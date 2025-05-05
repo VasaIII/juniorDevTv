@@ -98,6 +98,7 @@ async function handleMessage(message: Message) {
   // Simple command routing
   if (text?.startsWith('/start')) {
     const webAppUrl = getWebAppUrl();
+    console.log('Generated webAppUrl for /start button:', webAppUrl);
     if (!webAppUrl) {
       await bot.sendMessage(chatId, 'Sorry, the TV Guide app is not configured correctly.');
     } else {

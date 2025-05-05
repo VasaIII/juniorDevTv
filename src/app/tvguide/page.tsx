@@ -69,11 +69,9 @@ export default function TvGuideWebApp() {
             console.log(`[Effect Init] Found Telegram SDK & initData after ${attempts * 100}ms.`);
             tg.ready();
             fetchInitialFavoriteIds(tg.initData);
-            setFavoritesError(null);
         } else if (attempts >= maxAttempts) {
             clearInterval(intervalId);
             console.error('[Effect Init] Telegram SDK or initData not found after polling.');
-            setFavoritesError('Error on initial load: Could not find Telegram context.');
             setIsFavoritesLoading(false);
         }
     }, 100);
