@@ -42,21 +42,7 @@ export default function AboutTabContent() {
                 Well, this was an adventure... Let&#39;s just say some roads were less traveled (for good reason).
             </p>
             <p style={paragraphStyle}>
-                Previous failed attempts to maintain character and engineering integrity included:
-            </p>
-            <ul style={listStyle}>
-                <li style={listItemStyle}>
-                    <span style={emojiStyle}>🧱</span> persist in using Assembler instead of Basic <span style={{color: 'red', fontWeight: 'bold'}}>(Epic Fail)</span>
-                </li>
-                <li style={listItemStyle}>
-                    <span style={emojiStyle}>🖱️</span> don't use new Windows GUI, use DOS Visual Pascal instead <span style={{color: 'orange', fontWeight: 'bold'}}>(Nope)</span>
-                </li>
-                <li style={listItemStyle}>
-                    <span style={emojiStyle}>😵‍💫</span> C is real deal, C++ is for wimps <span style={{color: 'brown', fontWeight: 'bold'}}>(Abandon Ship!)</span>
-                </li>
-            </ul>
-            <p style={paragraphStyle}>
-                {'Lesson learned!'} <span style={{fontSize: '1.5em'}}>😅</span>
+                Previous attempts to maintain character and engineering integrity failed !
             </p>
         </div>
     );
