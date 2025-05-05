@@ -3,40 +3,47 @@
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useState, useCallback } from 'react';
-import { getWebSchedule, ScheduleItem, Show } from '@/lib/tvmaze';
+import { ScheduleItem, Show, Episode, getShowWithEpisodesAndCast, searchShows, SearchResult, getShowsByPage } from '@/lib/tvmaze';
 
-// Helper function
-function getTodayDateString() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
+// Import components
+import TabNavigation, { Tab } from '@/components/TabNavigation';
+import AboutTabContent from '@/components/AboutTabContent';
+import EpisodeDetailsModal from '@/components/EpisodeDetailsModal';
+import SearchBar from '@/components/SearchBar';
+import SearchResults from '@/components/SearchResults';
+import ScheduleView from '@/components/ScheduleView';
+import FavoritesTab from '@/components/FavoritesTab';
 
-export default function TvGuideWebApp() { 
-  // States
-  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
-  const [isScheduleLoading, setIsScheduleLoading] = useState(true);
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
-  const [today, setToday] = useState<string | null>(null);
+export default function TvGuideWebApp() {
+  // --- State Updates ---
+  const [displayedShows, setDisplayedShows] = useState<Show[]>([]);
+  const [isShowListLoading, setIsShowListLoading] = useState(true);
+  const [showListError, setShowListError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Show[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(false);
   const [favoritesError, setFavoritesError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'shows' | 'favorites' | 'about'>('shows');
+  const [activeTab, setActiveTab] = useState<Tab>('shows');
   const [isTogglingFav, setIsTogglingFav] = useState<number | null>(null);
+  const [selectedShowForEpisodeModal, setSelectedShowForEpisodeModal] = useState<Show | null>(null);
+  const [selectedEpisodeForModal, setSelectedEpisodeForModal] = useState<Episode | null>(null);
+  const [isEpisodeModalOpen, setIsEpisodeModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState<'name' | 'genre' | 'actor'>('name');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isLoadMoreLoading, setIsLoadMoreLoading] = useState(false);
+  const [hasMoreShows, setHasMoreShows] = useState(true);
 
-  // Effect to set today state
-  useEffect(() => {
-    setToday(getTodayDateString());
-  }, []);
+  // --- Effects and Handlers ---
 
-  // Polling Effect for Telegram SDK Check
   useEffect(() => {
     console.log('[Effect Init] Starting polling for Telegram SDK...');
     let attempts = 0;
-    const maxAttempts = 15; 
+    const maxAttempts = 15;
     let foundTg = false;
     const intervalId = setInterval(() => {
         attempts++;
@@ -45,9 +52,9 @@ export default function TvGuideWebApp() {
             foundTg = true;
             clearInterval(intervalId);
             console.log(`[Effect Init] Found Telegram SDK & initData after ${attempts * 100}ms.`);
-            tg.ready(); 
-            fetchInitialFavoriteIds(tg.initData); 
-            setFavoritesError(null); 
+            tg.ready();
+            fetchInitialFavoriteIds(tg.initData);
+            setFavoritesError(null);
         } else if (attempts >= maxAttempts) {
             clearInterval(intervalId);
             console.error('[Effect Init] Telegram SDK or initData not found after polling.');
@@ -57,9 +64,8 @@ export default function TvGuideWebApp() {
     }, 100);
     return () => { if (!foundTg) clearInterval(intervalId); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []);
 
-  // Fetch Initial Favorite IDs 
   const fetchInitialFavoriteIds = useCallback(async (initData: string) => {
     console.log('[fetchInitialFavoriteIds] Fetching...');
     setIsFavoritesLoading(true);
@@ -76,48 +82,81 @@ export default function TvGuideWebApp() {
         console.log('[fetchInitialFavoriteIds] Loaded.');
     } catch (err: any) {
         console.error('Fetch initial fav IDs error:', err);
-        // DISTINCT ERROR 2
-        setFavoritesError('Error fetching initial favorite status.'); 
+        setFavoritesError('Error fetching initial favorite status.');
     } finally {
         setIsFavoritesLoading(false);
     }
   }, []);
 
-  // Fetch Schedule for Shows Tab
   useEffect(() => {
-    async function fetchSchedule() {
-        if (!today) return;
-        setIsScheduleLoading(true);
-        setScheduleError(null);
-        try {
-            const data = await getWebSchedule(today, 'US');
-            setSchedule(data);
-        } catch (err) {
-            setScheduleError('Failed to fetch schedule.');
-        } finally {
-            setIsScheduleLoading(false);
-        }
-    }
-    if (activeTab === 'shows' && today) fetchSchedule();
-  }, [activeTab, today]); 
+    async function fetchInitialShows() {
+      if (activeTab !== 'shows' || showSearchResults) return;
+      
+      console.log('[ShowList Effect] Fetching initial page (0) of shows...');
+      setIsShowListLoading(true);
+      setShowListError(null);
+      setDisplayedShows([]);
+      setCurrentPage(0);
+      setHasMoreShows(true);
 
-  // Fetch Full Favorites for Favorites Tab
+      try {
+        const initialShows = await getShowsByPage(0);
+        console.log(`[ShowList Effect] Fetched ${initialShows.length} initial shows.`);
+        if (initialShows.length === 0) {
+          setHasMoreShows(false);
+        }
+        setDisplayedShows(initialShows);
+      } catch (err) {
+        console.error('[ShowList Effect] Error fetching initial shows:', err);
+        setShowListError('Failed to fetch initial list of shows.');
+        setHasMoreShows(false);
+      } finally {
+        setIsShowListLoading(false);
+      }
+    }
+
+    fetchInitialShows();
+  }, [activeTab, showSearchResults]);
+
+  const handleLoadMoreShows = useCallback(async () => {
+    if (isLoadMoreLoading || !hasMoreShows) return;
+
+    const nextPage = currentPage + 1;
+    console.log(`[Load More] Fetching page ${nextPage}...`);
+    setIsLoadMoreLoading(true);
+    setShowListError(null);
+
+    try {
+      const additionalShows = await getShowsByPage(nextPage);
+      console.log(`[Load More] Fetched ${additionalShows.length} additional shows from page ${nextPage}.`);
+      if (additionalShows.length > 0) {
+        setDisplayedShows(prevShows => [...prevShows, ...additionalShows]);
+        setCurrentPage(nextPage);
+      } else {
+        console.log('[Load More] No more shows found.');
+        setHasMoreShows(false);
+      }
+    } catch (err) {
+      console.error(`[Load More] Error fetching page ${nextPage}:`, err);
+      setShowListError('Failed to load more shows.');
+    } finally {
+      setIsLoadMoreLoading(false);
+    }
+  }, [currentPage, isLoadMoreLoading, hasMoreShows]);
+
   const fetchFavorites = useCallback(async () => {
     const tg = (window as any).Telegram?.WebApp;
-    // Log before check
-    console.log('[fetchFavorites] Checking SDK. window.Telegram.WebApp:', tg); 
+    console.log('[fetchFavorites] Checking SDK. window.Telegram.WebApp:', tg);
     console.log('[fetchFavorites] Checking SDK. typeof tg.initData:', typeof tg?.initData);
-
     if (!tg || !tg.initData) {
         console.warn('[fetchFavorites] Telegram SDK or initData check FAILED.');
-        // DISTINCT ERROR 3
-        setFavoritesError('Error loading favorites: Please ensure opened via Telegram button.'); 
+        setFavoritesError('Error loading favorites: Please ensure opened via Telegram button.');
         setIsFavoritesLoading(false); return;
     }
     setIsFavoritesLoading(true);
     setFavoritesError(null);
     try {
-        const response = await fetch('/api/webapp/favorites', { 
+        const response = await fetch('/api/webapp/favorites', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData: tg.initData }),
@@ -125,9 +164,9 @@ export default function TvGuideWebApp() {
         if (!response.ok) throw new Error('Failed to fetch favorites');
         const favData: Show[] = await response.json();
         setFavorites(favData);
-        setFavoriteIds(new Set(favData.map(show => show.id))); 
+        setFavoriteIds(new Set(favData.map(show => show.id)));
     } catch (err: any) {
-        setFavoritesError('Failed to fetch favorites list.'); // Keep specific fetch error
+        setFavoritesError('Failed to fetch favorites list.');
     } finally {
         setIsFavoritesLoading(false);
     }
@@ -137,18 +176,14 @@ export default function TvGuideWebApp() {
     if (activeTab === 'favorites') fetchFavorites();
   }, [activeTab, fetchFavorites]);
 
-  // Handle Toggling Favorite Status
   const handleToggleFavorite = async (showId: number) => {
     const tg = (window as any).Telegram?.WebApp;
-    // Log before check
     console.log('[handleToggleFavorite] Checking SDK. window.Telegram.WebApp:', tg);
     console.log('[handleToggleFavorite] Checking SDK. typeof tg.initData:', typeof tg?.initData);
-
-    if (!tg || !tg.initData) { 
+    if (!tg || !tg.initData) {
         console.error('[handleToggleFavorite] SDK or initData check FAILED.');
-        // DISTINCT ERROR 4
-        alert('Error: Cannot change status. Please ensure opened via Telegram button.'); 
-        return; 
+        alert('Error: Cannot change status. Please ensure opened via Telegram button.');
+        return;
     }
     if (isTogglingFav) return;
     setIsTogglingFav(showId);
@@ -159,7 +194,7 @@ export default function TvGuideWebApp() {
         return newSet;
     });
     try {
-        const response = await fetch('/api/webapp/favorites/toggle', { 
+        const response = await fetch('/api/webapp/favorites/toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData: tg.initData, showId }),
@@ -174,8 +209,8 @@ export default function TvGuideWebApp() {
                 return newSet;
             });
         }
-        if (activeTab === 'favorites') fetchFavorites(); 
-    } catch (err: any) { 
+        if (activeTab === 'favorites') fetchFavorites();
+    } catch (err: any) {
          console.error('Toggle favorite error:', err);
          alert(`Error toggling favorite: ${err.message || 'Could not update favorite status.'}`);
          setFavoriteIds(prev => {
@@ -183,152 +218,158 @@ export default function TvGuideWebApp() {
             if (currentStatus) newSet.add(showId); else newSet.delete(showId);
             return newSet;
         });
-     } 
+     }
     finally { setIsTogglingFav(null); }
   };
 
-  // --- Rendering --- 
-  const tabButtonStyle = (tabName: 'shows' | 'favorites' | 'about') => ({ 
-       padding: '10px 15px', border: 'none', background: activeTab === tabName ? '#007bff' : '#eee', color: activeTab === tabName ? 'white' : 'black', cursor: 'pointer', marginRight: '5px', borderRadius: '5px 5px 0 0', fontWeight: activeTab === tabName ? 'bold' : 'normal' as 'bold' | 'normal'
-   });
-  const starButtonStyle = { 
-       background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.5em', padding: '0 5px', verticalAlign: 'middle'
-   };
+  const handleFetchShowEpisodesForSeasonSelection = useCallback(async (showId: number): Promise<Episode[] | null> => {
+    console.log(`[FetchEpisodesAndCast] Fetching for show ID: ${showId}`);
+    try {
+      const showWithData = await getShowWithEpisodesAndCast(showId);
+      if (!showWithData || !showWithData._embedded?.episodes) {
+        console.warn(`[FetchEpisodesAndCast] No episode data found for show ID: ${showId}`);
+        return null;
+      }
+      console.log(`[FetchEpisodesAndCast] Fetched ${showWithData._embedded.episodes.length} episodes for show ID: ${showId}`);
+      return showWithData._embedded.episodes;
+    } catch (err: any) {
+      console.error(`[FetchEpisodesAndCast] Error fetching episodes/cast for show ID ${showId}:`, err);
+      return null;
+    }
+  }, []);
 
-  // Schedule Item Card (No hasMounted check)
-   const ScheduleItemCard = ({ item }: { item: ScheduleItem }) => {
-        const show = item._embedded.show;
-        const isFav = favoriteIds.has(show.id);
-        const isLoadingFav = isTogglingFav === show.id;
-        const canInteract = Boolean((window as any).Telegram?.WebApp?.initData); 
-        // Log interaction check
-        // console.log(`[ScheduleItemCard ${show.id}] canInteract:`, canInteract);
-        
-        return (
-            <li style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
-                {show.image?.medium && (
-                    <img src={show.image.medium} alt={show.name} style={{ marginRight: '15px', width: '60px', height: 'auto' }}/>
-                 )}
-                <div style={{ flexGrow: 1 }}>
-                    <strong style={{ fontSize: '1.1em' }}>
-                         <button 
-                            onClick={() => handleToggleFavorite(show.id)}
-                            style={starButtonStyle}
-                            disabled={isLoadingFav || !canInteract} 
-                            title={canInteract ? (isFav ? 'Remove from Favorites' : 'Add to Favorites') : 'Open via Telegram to favorite'}
-                         >
-                           {isLoadingFav ? '...' : (isFav ? '⭐' : '☆')}
-                         </button>
-                        {show.name}
-                    </strong>
-                     <br />
-                    <em>S{String(item.season).padStart(2, '0')}E{String(item.number).padStart(2, '0')} - {item.name}</em>
-                    <br />
-                    Airs at: <strong>{item.airtime}</strong> on {show.network?.name || show.webChannel?.name || 'N/A'}
-                    {item.summary && (
-                        <p style={{ fontSize: '0.9em', color: '#555' }} dangerouslySetInnerHTML={{ __html: item.summary }} />
-                    )}
-                </div>
-            </li>
-        );
-   };
+  const handleEpisodeSelected = useCallback((show: Show, episode: Episode) => {
+    console.log(`[EpisodeSelected] Show: ${show.name}, Episode: S${episode.season}E${episode.number} - ${episode.name}`);
+    console.log("[EpisodeSelected] Show object received:", show);
+    setSelectedShowForEpisodeModal(show);
+    setSelectedEpisodeForModal(episode);
+    setIsEpisodeModalOpen(true);
+  }, []);
 
-  // Favorite Show Card
-  const FavoriteShowCard = ({ show }: { show: Show }) => (
-       <li style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
-         {show.image?.medium && (
-             <img src={show.image.medium} alt={show.name} style={{ marginRight: '15px', width: '60px', height: 'auto' }}/>
-         )}
-         <div style={{ flexGrow: 1 }}>
-             <strong style={{ fontSize: '1.1em' }}>{show.name}</strong>
-             {show.network?.name && <span style={{ fontSize: '0.9em', color: '#555' }}> ({show.network.name})</span>}
-             <br />
-             {show.genres?.length > 0 && <span style={{ fontSize: '0.9em' }}>Genres: {show.genres.join(', ')}<br/></span>}
-             {show.status && <span style={{ fontSize: '0.9em' }}>Status: {show.status}<br/></span>}
-             {show.summary && (
-                 <p style={{ fontSize: '0.9em', color: '#555' }} dangerouslySetInnerHTML={{ __html: show.summary.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...' }} />
-             )}
-             {show.officialSite && 
-                 <a href={show.officialSite} target="_blank" rel="noopener noreferrer" style={{fontSize: '0.9em'}}>Official Site</a>
-             }
-         </div>
-     </li>
-   );
+  const handleCloseEpisodeModal = () => {
+    setIsEpisodeModalOpen(false);
+    setSelectedShowForEpisodeModal(null);
+    setSelectedEpisodeForModal(null);
+  };
+
+  const handleSearch = async (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) return;
+    console.log(`[Search] Type: ${searchType}, Query: "${searchQuery}"`);
+    if (searchType !== 'name') {
+        alert(`Searching by ${searchType} is not implemented yet.`);
+        return;
+    }
+    setIsSearching(true);
+    setSearchError(null);
+    setSearchResults([]);
+    setShowSearchResults(true);
+    setDisplayedShows([]);
+    try {
+      const results = await searchShows(searchQuery);
+      setSearchResults(results);
+      if (results.length === 0) {
+        setSearchError(`No shows found matching "${searchQuery}".`);
+      }
+    } catch (err) {
+      console.error('[Search] Error:', err);
+      setSearchError('Failed to perform search.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setShowSearchResults(false);
+  };
 
   return (
     <>
-      {/* Re-add Script tag with lazyOnload strategy */}
-      <Script 
-        src="https://telegram.org/js/telegram-web-app.js" 
-        strategy="lazyOnload" // Load after browser idle
-        onLoad={() => {
-            console.log('[Script Load] Telegram script loaded via next/script (lazyOnload).');
-            // Optional: Could trigger a re-check here if needed, but polling should catch it.
-        }}
-        onError={(e) => {
-            console.error('[Script Error] Failed to load Telegram script:', e);
-            // Avoid setting state here directly if component hasn't mounted
-            // The polling useEffect will handle the error state
-        }}
+      <Script
+        src="https://telegram.org/js/telegram-web-app.js"
+        strategy="lazyOnload"
+        onLoad={() => console.log('[Script Load] Telegram script loaded.')}
+        onError={(e) => console.error('[Script Error] Failed to load Telegram script:', e)}
       />
       <Head><title>TV Guide</title></Head>
+
       <div style={{ padding: '15px', fontFamily: 'sans-serif' }}>
-        {/* Tabs */}
-        <div style={{ marginBottom: '15px', borderBottom: '1px solid #ccc' }}>
-           <button style={tabButtonStyle('shows')} onClick={() => setActiveTab('shows')}>
-            Shows
-          </button>
-          <button style={tabButtonStyle('favorites')} onClick={() => setActiveTab('favorites')}>
-            Favorites {favoriteIds.size > 0 ? `(${favoriteIds.size})` : ''}
-          </button>
-          <button style={tabButtonStyle('about')} onClick={() => setActiveTab('about')}>
-            About
-          </button>
-        </div>
-        {/* Content */}
+        <TabNavigation
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            favoriteCount={favoriteIds.size}
+        />
+
         <div>
           {activeTab === 'shows' && (
-            <div> 
-              {today && <h2>TV Schedule for {today} (US)</h2>}
-              {isScheduleLoading && <p>Loading schedule...</p>}
-              {scheduleError && <p style={{ color: 'red' }}>{scheduleError}</p>}
-              {isFavoritesLoading && <p>Loading favorite status...</p>}
-              {favoritesError && <p style={{ color: 'orange' }}>{favoritesError}</p>}
-              {!isScheduleLoading && !scheduleError && (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  {schedule.length === 0 && !isScheduleLoading && <p>No schedule found for today.</p>}
-                  {schedule.map((item) => (
-                     <ScheduleItemCard key={item.id} item={item} />
-                  ))}
-                </ul>
+            <div>
+              <SearchBar
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                searchType={searchType}
+                setSearchType={setSearchType}
+                handleSearch={handleSearch}
+                clearSearch={clearSearch}
+                isSearching={isSearching}
+                showSearchResults={showSearchResults}
+              />
+
+              {showSearchResults ? (
+                <SearchResults
+                  searchQuery={searchQuery}
+                  isSearching={isSearching}
+                  searchError={searchError}
+                  searchResults={searchResults}
+                  favoriteIds={favoriteIds}
+                  isTogglingFav={isTogglingFav}
+                  handleToggleFavorite={handleToggleFavorite}
+                  handleFetchShowEpisodesForSeasonSelection={handleFetchShowEpisodesForSeasonSelection}
+                  handleEpisodeSelected={handleEpisodeSelected}
+                />
+              ) : (
+                <ScheduleView
+                  title="Shows"
+                  isLoading={isShowListLoading}
+                  error={showListError}
+                  shows={displayedShows}
+                  isFavoritesLoading={isFavoritesLoading}
+                  favoritesError={favoritesError}
+                  favoriteIds={favoriteIds}
+                  isTogglingFav={isTogglingFav}
+                  handleToggleFavorite={handleToggleFavorite}
+                  handleFetchShowEpisodesForSeasonSelection={handleFetchShowEpisodesForSeasonSelection}
+                  handleEpisodeSelected={handleEpisodeSelected}
+                  showLoadMore={hasMoreShows}
+                  handleLoadMore={handleLoadMoreShows}
+                  isLoadMoreLoading={isLoadMoreLoading}
+                />
               )}
-            </div> 
-          )}
-          {activeTab === 'favorites' && ( 
-            <div> 
-                <h2>Your Favorites</h2>
-                {isFavoritesLoading && <p>Loading favorites...</p>}
-                {favoritesError && <p style={{ color: 'red' }}>{favoritesError}</p>}
-                {!isFavoritesLoading && !favoritesError && (
-                    <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {favoriteIds.size === 0 && favorites.length === 0 && <p>Use the star icon in the Shows tab to add favorites!</p>}
-                    {favorites.map((show) => (
-                        <FavoriteShowCard key={show.id} show={show} />
-                    ))}
-                    </ul>
-                )}
             </div>
-           )}
-          {activeTab === 'about' && ( 
-            <div> 
-                <h2>About</h2>
-                <p>
-                    This is the TV Guide Web App. Find daily schedules and manage your favorite shows.
-                </p>
-            </div> 
           )}
+
+          {activeTab === 'favorites' && (
+            <FavoritesTab
+              isFavoritesLoading={isFavoritesLoading}
+              favoritesError={favoritesError}
+              favoriteIds={favoriteIds}
+              favorites={favorites}
+            />
+           )}
+
+          {activeTab === 'about' && <AboutTabContent />}
         </div>
       </div>
+
+      {isEpisodeModalOpen && (
+        <EpisodeDetailsModal
+          show={selectedShowForEpisodeModal}
+          episode={selectedEpisodeForModal}
+          onClose={handleCloseEpisodeModal}
+        />
+      )}
     </>
   );
 }
