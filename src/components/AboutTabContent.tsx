@@ -56,7 +56,7 @@ export default function AboutTabContent() {
                 </li>
             </ul>
             <p style={paragraphStyle}>
-                Lesson learned! <span style={{fontSize: '1.5em'}}>😅</span>
+                {'Lesson learned!'} <span style={{fontSize: '1.5em'}}>😅</span>
             </p>
         </div>
     );
