@@ -3,6 +3,17 @@ import crypto from 'crypto';
 import { getFavoriteIds } from '@/lib/favorites';
 import { getShowDetails, Show } from '@/lib/tvmaze';
 
+// Simple interface for expected User structure from initData
+interface TelegramUser {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    language_code?: string;
+    is_premium?: boolean;
+    allows_write_to_pm?: boolean;
+}
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 /**
@@ -11,7 +22,8 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
  * @param botToken - Your Telegram bot token.
  * @returns The parsed user object if valid, null otherwise.
  */
-function validateInitData(initData: string, botToken: string): Record<string, any> | null {
+// Use specific interface for return type
+function validateInitData(initData: string, botToken: string): TelegramUser | null {
     try {
         const urlParams = new URLSearchParams(initData);
         const hash = urlParams.get('hash');
@@ -39,10 +51,11 @@ function validateInitData(initData: string, botToken: string): Record<string, an
             // Data is valid, parse the user object
             const userJson = urlParams.get('user');
             if (userJson) {
-                return JSON.parse(userJson);
+                // Assume JSON.parse returns a structure matching TelegramUser
+                return JSON.parse(userJson) as TelegramUser;
             }
         }
-    } catch (error) {
+    } catch (error: unknown) { // Catch as unknown
         console.error("Error validating initData:", error);
     }
     return null; // Validation failed or error occurred
@@ -91,12 +104,14 @@ export async function POST(request: NextRequest) {
         // Return the array of favorite shows
         return NextResponse.json(favoriteShows, { status: 200 });
 
-    } catch (error: any) {
+    } catch (error: unknown) { // Catch as unknown
         console.error('Error fetching favorites for webapp:', error);
         // Avoid leaking detailed errors
         let errorMessage = 'Internal server error';
         if (error instanceof SyntaxError) { // Handle potential JSON parsing errors from request body
             errorMessage = 'Invalid request format';
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
         }
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }

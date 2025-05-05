@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { getFavoriteIds, addFavorite, removeFavorite, isFavorite } from '@/lib/favorites';
+import { addFavorite, removeFavorite, isFavorite } from '@/lib/favorites';
+
+// Simple interface for expected User structure from initData (consistent with other file)
+interface TelegramUser {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    language_code?: string;
+    is_premium?: boolean;
+    allows_write_to_pm?: boolean;
+}
 
 // Reuse the validation logic (consider moving to a shared util if used elsewhere)
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-function validateInitData(initData: string, botToken: string): Record<string, any> | null {
+// Use specific interface for return type
+function validateInitData(initData: string, botToken: string): TelegramUser | null {
     try {
         const urlParams = new URLSearchParams(initData);
         const hash = urlParams.get('hash');
@@ -22,9 +34,10 @@ function validateInitData(initData: string, botToken: string): Record<string, an
         const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
         if (calculatedHash === hash) {
             const userJson = urlParams.get('user');
-            return userJson ? JSON.parse(userJson) : null;
+            // Assume JSON.parse returns a structure matching TelegramUser
+            return userJson ? JSON.parse(userJson) as TelegramUser : null;
         }
-    } catch (error) {
+    } catch (error: unknown) { // Catch as unknown
         console.error("Error validating initData:", error);
     }
     return null;
@@ -77,11 +90,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Failed to update favorite status' }, { status: 500 });
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) { // Catch as unknown
         console.error('Error toggling favorite status:', error);
          let errorMessage = 'Internal server error';
         if (error instanceof SyntaxError) {
             errorMessage = 'Invalid request format';
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
         }
         return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
     }

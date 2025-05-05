@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import TelegramBot, { InlineKeyboardButton, Message, CallbackQuery } from 'node-telegram-bot-api';
-import { searchShows, getShowDetails, Show } from '@/lib/tvmaze'; // Assuming tvmaze functions are in src/lib
+import TelegramBot, { InlineKeyboardButton, Message } from 'node-telegram-bot-api';
+import { searchShows, Show } from '@/lib/tvmaze'; // Assuming tvmaze functions are in src/lib
 // No longer need favorite functions here as chat doesn't modify them
 // import { addFavorite, removeFavorite, getFavoriteIds, isFavorite } from '@/lib/favorites'; 
 
@@ -31,34 +31,28 @@ export async function POST(request: NextRequest) {
     // Respond to Telegram confirming receipt of the update
     return NextResponse.json({ status: 'ok' });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error processing Telegram update:', error);
     // Try sending an error message to the user if possible
-    if (error.chatId) { // Add chatId to errors we throw/catch if needed
+    // Check if error is an object with chatId (basic check)
+    if (typeof error === 'object' && error !== null && 'chatId' in error) {
         try {
-            await bot.sendMessage(error.chatId, "Sorry, an error occurred. Please try again later.");
+            // Assuming error.chatId is number if it exists
+            await bot.sendMessage(error.chatId as number, "Sorry, an error occurred. Please try again later.");
         } catch (sendError) {
             console.error('Failed to send error message to user:', sendError);
         }
     }
-    return NextResponse.json({ status: 'error', message: 'Internal server error' }, { status: 500 });
+    // Construct a user-friendly error message if possible
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ status: 'error', message }, { status: 500 });
   }
 }
 
 // --- Constants ---
 const WEB_APP_PATH = '/tvguide'; // Path to your TV Guide Web App
-const ABOUT_TEXT = 'This bot helps you find TV shows and manage your favorites. Built with Next.js and TVMaze API.';
 
 // --- Keyboards ---
-const mainKeyboard: InlineKeyboardButton[][] = [
-  [
-    { text: '🔍 Shows', callback_data: 'tab:shows' },
-    { text: '⭐ Favorites', callback_data: 'tab:favs' },
-    { text: 'ℹ️ About', callback_data: 'tab:about' },
-  ],
-  // Add the web app button if configured
-  // We'll dynamically add this later based on env var presence
-];
 
 function getWebAppUrl(): string | null {
   const webAppUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;

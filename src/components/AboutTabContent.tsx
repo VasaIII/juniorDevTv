@@ -39,7 +39,7 @@ export default function AboutTabContent() {
         <div style={containerStyle}>
             <h2 style={headingStyle}>About This Project</h2>
             <p style={paragraphStyle}>
-                Fully vibed out (for good reason).
+                Well, this was an adventure... Let&apos;s just say some roads were less traveled (for good reason).
             </p>
             <p style={paragraphStyle}>
                 Previous failed attempts to maintain character and engineering integrity included:
@@ -56,7 +56,7 @@ export default function AboutTabContent() {
                 </li>
             </ul>
             <p style={paragraphStyle}>
-                Lesson learned! <span style={{fontSize: '1.5em'}}>👍</span>
+                Lesson learned! <span style={{fontSize: '1.5em'}}>😅</span>
             </p>
         </div>
     );

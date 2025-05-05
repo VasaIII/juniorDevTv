@@ -35,7 +35,7 @@ export interface Show {
   schedule?: { time: string; days: string[] };
   rating?: { average: number | null };
   network?: { id: number; name: string; country: { name: string; code: string; timezone: string } };
-  webChannel?: { id: number; name: string; country: any | null };
+  webChannel?: { id: number; name: string; country: unknown | null };
   externals?: { tvrage: number | null; thetvdb: number | null; imdb: string | null };
   image?: { medium: string; original: string };
   summary: string;
@@ -143,13 +143,13 @@ export async function getShowWithEpisodesAndCast(showId: number): Promise<Show |
       `${TVMAZE_API_BASE_URL}/shows/${showId}?embed[]=episodes&embed[]=cast`
     );
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 404) {
+  } catch (error: unknown) {
+    if (error instanceof axios.AxiosError && error.response && error.response.status === 404) {
       console.log(`Show with ID ${showId} (with episodes/cast) not found on TVMaze.`);
       return null;
     }
     console.error(`Error fetching episodes/cast for show ID ${showId}:`, error);
-    throw error; 
+    throw error;
   }
 }
 
@@ -164,16 +164,13 @@ export async function getShowDetails(showId: number): Promise<Show | null> {
       `${TVMAZE_API_BASE_URL}/shows/${showId}`
     );
     return response.data;
-  } catch (error: any) {
-    // Handle 404 Not Found specifically
-    if (error.response && error.response.status === 404) {
+  } catch (error: unknown) {
+    if (error instanceof axios.AxiosError && error.response && error.response.status === 404) {
       console.log(`Show with ID ${showId} not found on TVMaze.`);
       return null;
     }
-    // Log other errors
     console.error(`Error fetching details for show ID ${showId}:`, error);
-    // Depending on how you want to handle errors, you might re-throw, return null, etc.
-    throw error; // Re-throw for the caller to handle other errors
+    throw error;
   }
 }
 
@@ -188,13 +185,12 @@ export async function getShowsByPage(page: number = 0): Promise<Show[]> {
       `${TVMAZE_API_BASE_URL}/shows?page=${page}`
     );
     return response.data;
-  } catch (error: any) {
-    // Handle 404 specifically for page not found - API might return 404 for out-of-bounds pages
-    if (error.response && error.response.status === 404) {
+  } catch (error: unknown) {
+    if (error instanceof axios.AxiosError && error.response && error.response.status === 404) {
       console.log(`Page ${page} not found or end of show list reached.`);
-      return []; // Return empty array to indicate no more shows
+      return [];
     }
     console.error(`Error fetching shows for page ${page}:`, error);
-    throw error; // Re-throw other errors
+    throw error;
   }
 } 

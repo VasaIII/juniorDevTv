@@ -23,17 +23,21 @@ async function loadFavorites(): Promise<UserFavorites> {
             console.error('Invalid favorites file format. Starting fresh.');
             return {};
         }
-    } catch (error: any) {
-        if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+        // Check if the error is a file system error object
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
             console.log('Favorites file not found, starting with empty favorites.');
             return {};
         }
         // Handle JSON parsing errors specifically
         if (error instanceof SyntaxError) {
              console.error('Error parsing favorites JSON:', error);
-             return {};
+             return {}; // Return empty on parse error
         }
         console.error('Error loading favorites file:', error);
+        // Consider throwing the error or returning a specific error indicator
+        // depending on how critical the favorites loading is.
+        // For now, returning empty to allow the app to continue.
         return {};
     }
 }

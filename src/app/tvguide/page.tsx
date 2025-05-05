@@ -3,7 +3,7 @@
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useState, useCallback } from 'react';
-import { ScheduleItem, Show, Episode, getShowWithEpisodesAndCast, searchShows, SearchResult, getShowsByPage } from '@/lib/tvmaze';
+import { Show, Episode, getShowWithEpisodesAndCast, searchShows, SearchResult, getShowsByPage } from '@/lib/tvmaze';
 
 // Import components
 import TabNavigation, { Tab } from '@/components/TabNavigation';
@@ -13,6 +13,20 @@ import SearchBar from '@/components/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import ScheduleView from '@/components/ScheduleView';
 import FavoritesTab from '@/components/FavoritesTab';
+
+// Define a type for the Telegram WebApp object for better type safety
+interface TelegramWebApp {
+    initData?: string;
+    ready: () => void;
+    // Add other properties if needed
+}
+
+// Define a type for the Window object including the optional Telegram property
+interface WindowWithTelegram extends Window {
+    Telegram?: {
+        WebApp?: TelegramWebApp;
+    };
+}
 
 export default function TvGuideWebApp() {
   // --- State Updates ---
@@ -47,7 +61,8 @@ export default function TvGuideWebApp() {
     let foundTg = false;
     const intervalId = setInterval(() => {
         attempts++;
-        const tg = (window as any).Telegram?.WebApp;
+        const tgWindow = window as WindowWithTelegram;
+        const tg = tgWindow.Telegram?.WebApp;
         if (tg && tg.initData) {
             foundTg = true;
             clearInterval(intervalId);
@@ -76,13 +91,17 @@ export default function TvGuideWebApp() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData }),
         });
-        if (!response.ok) throw new Error('Failed to fetch initial favorites');
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(`Failed to fetch initial favorites: ${response.statusText} ${errorBody.error || ''}`.trim());
+        }
         const favData: Show[] = await response.json();
         setFavoriteIds(new Set(favData.map(show => show.id)));
         console.log('[fetchInitialFavoriteIds] Loaded.');
-    } catch (err: any) {
-        console.error('Fetch initial fav IDs error:', err);
-        setFavoritesError('Error fetching initial favorite status.');
+    } catch (error: unknown) {
+        console.error('Fetch initial fav IDs error:', error);
+        const message = error instanceof Error ? error.message : 'Unknown error fetching favorite status.';
+        setFavoritesError(`Error fetching initial favorite status: ${message}`);
     } finally {
         setIsFavoritesLoading(false);
     }
@@ -106,9 +125,10 @@ export default function TvGuideWebApp() {
           setHasMoreShows(false);
         }
         setDisplayedShows(initialShows);
-      } catch (err) {
-        console.error('[ShowList Effect] Error fetching initial shows:', err);
-        setShowListError('Failed to fetch initial list of shows.');
+      } catch (error: unknown) {
+        console.error('[ShowList Effect] Error fetching initial shows:', error);
+        const message = error instanceof Error ? error.message : 'Unknown error.';
+        setShowListError(`Failed to fetch initial list of shows: ${message}`);
         setHasMoreShows(false);
       } finally {
         setIsShowListLoading(false);
@@ -136,16 +156,18 @@ export default function TvGuideWebApp() {
         console.log('[Load More] No more shows found.');
         setHasMoreShows(false);
       }
-    } catch (err) {
-      console.error(`[Load More] Error fetching page ${nextPage}:`, err);
-      setShowListError('Failed to load more shows.');
+    } catch (error: unknown) {
+      console.error(`[Load More] Error fetching page ${nextPage}:`, error);
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      setShowListError(`Failed to load more shows: ${message}`);
     } finally {
       setIsLoadMoreLoading(false);
     }
   }, [currentPage, isLoadMoreLoading, hasMoreShows]);
 
   const fetchFavorites = useCallback(async () => {
-    const tg = (window as any).Telegram?.WebApp;
+    const tgWindow = window as WindowWithTelegram;
+    const tg = tgWindow.Telegram?.WebApp;
     console.log('[fetchFavorites] Checking SDK. window.Telegram.WebApp:', tg);
     console.log('[fetchFavorites] Checking SDK. typeof tg.initData:', typeof tg?.initData);
     if (!tg || !tg.initData) {
@@ -161,12 +183,16 @@ export default function TvGuideWebApp() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData: tg.initData }),
          });
-        if (!response.ok) throw new Error('Failed to fetch favorites');
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(`Failed to fetch favorites: ${response.statusText} ${errorBody.error || ''}`.trim());
+        }
         const favData: Show[] = await response.json();
         setFavorites(favData);
         setFavoriteIds(new Set(favData.map(show => show.id)));
-    } catch (err: any) {
-        setFavoritesError('Failed to fetch favorites list.');
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error.';
+        setFavoritesError(`Failed to fetch favorites list: ${message}`);
     } finally {
         setIsFavoritesLoading(false);
     }
@@ -177,7 +203,8 @@ export default function TvGuideWebApp() {
   }, [activeTab, fetchFavorites]);
 
   const handleToggleFavorite = async (showId: number) => {
-    const tg = (window as any).Telegram?.WebApp;
+    const tgWindow = window as WindowWithTelegram;
+    const tg = tgWindow.Telegram?.WebApp;
     console.log('[handleToggleFavorite] Checking SDK. window.Telegram.WebApp:', tg);
     console.log('[handleToggleFavorite] Checking SDK. typeof tg.initData:', typeof tg?.initData);
     if (!tg || !tg.initData) {
@@ -200,7 +227,9 @@ export default function TvGuideWebApp() {
             body: JSON.stringify({ initData: tg.initData, showId }),
          });
         const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.error || 'Failed to toggle');
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to toggle favorite status');
+        }
         if (result.isFavorite !== !currentStatus) {
              console.warn('Backend status mismatch after toggle!');
              setFavoriteIds(prev => {
@@ -210,9 +239,10 @@ export default function TvGuideWebApp() {
             });
         }
         if (activeTab === 'favorites') fetchFavorites();
-    } catch (err: any) {
-         console.error('Toggle favorite error:', err);
-         alert(`Error toggling favorite: ${err.message || 'Could not update favorite status.'}`);
+    } catch (error: unknown) {
+         const message = error instanceof Error ? error.message : 'Could not update favorite status.';
+         console.error('Toggle favorite error:', error);
+         alert(`Error toggling favorite: ${message}`);
          setFavoriteIds(prev => {
             const newSet = new Set(prev);
             if (currentStatus) newSet.add(showId); else newSet.delete(showId);
@@ -232,8 +262,9 @@ export default function TvGuideWebApp() {
       }
       console.log(`[FetchEpisodesAndCast] Fetched ${showWithData._embedded.episodes.length} episodes for show ID: ${showId}`);
       return showWithData._embedded.episodes;
-    } catch (err: any) {
-      console.error(`[FetchEpisodesAndCast] Error fetching episodes/cast for show ID ${showId}:`, err);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      console.error(`[FetchEpisodesAndCast] Error fetching episodes/cast for show ID ${showId}:`, error);
       return null;
     }
   }, []);
@@ -271,9 +302,10 @@ export default function TvGuideWebApp() {
       if (results.length === 0) {
         setSearchError(`No shows found matching "${searchQuery}".`);
       }
-    } catch (err) {
-      console.error('[Search] Error:', err);
-      setSearchError('Failed to perform search.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      console.error('[Search] Error:', error);
+      setSearchError(`Failed to perform search: ${message}`);
     } finally {
       setIsSearching(false);
     }
@@ -292,7 +324,7 @@ export default function TvGuideWebApp() {
         src="https://telegram.org/js/telegram-web-app.js"
         strategy="lazyOnload"
         onLoad={() => console.log('[Script Load] Telegram script loaded.')}
-        onError={(e) => console.error('[Script Error] Failed to load Telegram script:', e)}
+        onError={(e: unknown) => console.error('[Script Error] Failed to load Telegram script:', e)}
       />
       <Head><title>TV Guide</title></Head>
 

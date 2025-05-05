@@ -5,6 +5,18 @@ import { Show, Episode } from '@/lib/tvmaze';
 import SeasonSelector from './SeasonSelector';
 import EpisodeSelector from './EpisodeSelector';
 
+// --- Redefine types for Window/Telegram access (consistency) ---
+interface TelegramWebApp {
+    initData?: string;
+    ready?: () => void; // Make ready optional as we only check initData here
+}
+interface WindowWithTelegram extends Window {
+    Telegram?: {
+        WebApp?: TelegramWebApp;
+    };
+}
+// --- End Types ---
+
 // Styles copied from ScheduleItemCard (Consider sharing styles later)
 const starButtonStyle: React.CSSProperties = {
     background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.5em', padding: '0 5px', verticalAlign: 'middle'
@@ -20,8 +32,8 @@ interface ShowCardProps {
     favoriteIds: Set<number>;
     isTogglingFav: number | null;
     handleToggleFavorite: (showId: number) => void;
-    handleFetchShowEpisodesForSeasonSelection: (showId: number) => Promise<Episode[] | null>; 
-    handleEpisodeSelected: (show: Show, episode: Episode) => void; 
+    handleFetchShowEpisodesForSeasonSelection: (showId: number) => Promise<Episode[] | null>;
+    handleEpisodeSelected: (show: Show, episode: Episode) => void;
 }
 
 // Rename component function
@@ -36,8 +48,9 @@ export default function ShowCard({
     
     const isFav = favoriteIds.has(show.id);
     const isLoadingFav = isTogglingFav === show.id;
-    // Check SDK availability (assuming this check is still needed)
-    const canInteract = typeof window !== 'undefined' && Boolean((window as any).Telegram?.WebApp?.initData);
+    // Check SDK availability using defined types
+    const tgWindow = typeof window !== 'undefined' ? window as WindowWithTelegram : null;
+    const canInteract = Boolean(tgWindow?.Telegram?.WebApp?.initData);
 
     // State for this specific card (Similar to ScheduleItemCard)
     const [isSeasonSelectorOpen, setIsSeasonSelectorOpen] = useState(false);

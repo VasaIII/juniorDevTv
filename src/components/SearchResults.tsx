@@ -29,7 +29,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 }) => {
   return (
     <div>
-      <h2>Search Results for "{searchQuery}"</h2>
+      <h2>Search Results for &quot;{searchQuery}&quot;</h2>
       {isSearching && <p>Searching...</p>}
       {searchError && <p style={{ color: 'red' }}>{searchError}</p>}
       {!isSearching && searchResults.length > 0 && (
@@ -49,7 +49,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       )}
       {/* Handle case where search returned no results but no error occurred */}
       {!isSearching && !searchError && searchResults.length === 0 && searchQuery && (
-         <p>No shows found matching "{searchQuery}".</p>
+         <p>No shows found matching &quot;{searchQuery}&quot;.</p>
       )}
     </div>
   );
