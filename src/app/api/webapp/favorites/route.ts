@@ -52,7 +52,9 @@ function validateInitData(initData: string, botToken: string): TelegramUser | nu
             const userJson = urlParams.get('user');
             if (userJson) {
                 // Assume JSON.parse returns a structure matching TelegramUser
-                return JSON.parse(userJson) as TelegramUser;
+                // Explicitly type the parsed object
+                const parsedUser: TelegramUser = JSON.parse(userJson);
+                return parsedUser;
             }
         }
     } catch (error: unknown) { // Catch as unknown
@@ -108,10 +110,13 @@ export async function POST(request: NextRequest) {
         console.error('Error fetching favorites for webapp:', error);
         // Avoid leaking detailed errors
         let errorMessage = 'Internal server error';
+        // Check error type before accessing properties
         if (error instanceof SyntaxError) { // Handle potential JSON parsing errors from request body
             errorMessage = 'Invalid request format';
         } else if (error instanceof Error) {
             errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
         }
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }

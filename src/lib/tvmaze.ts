@@ -144,7 +144,7 @@ export async function getShowWithEpisodesAndCast(showId: number): Promise<Show |
     );
     return response.data;
   } catch (error: unknown) {
-    if (error instanceof axios.AxiosError && error.response && error.response.status === 404) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       console.log(`Show with ID ${showId} (with episodes/cast) not found on TVMaze.`);
       return null;
     }
@@ -165,7 +165,7 @@ export async function getShowDetails(showId: number): Promise<Show | null> {
     );
     return response.data;
   } catch (error: unknown) {
-    if (error instanceof axios.AxiosError && error.response && error.response.status === 404) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       console.log(`Show with ID ${showId} not found on TVMaze.`);
       return null;
     }
@@ -186,7 +186,7 @@ export async function getShowsByPage(page: number = 0): Promise<Show[]> {
     );
     return response.data;
   } catch (error: unknown) {
-    if (error instanceof axios.AxiosError && error.response && error.response.status === 404) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       console.log(`Page ${page} not found or end of show list reached.`);
       return [];
     }

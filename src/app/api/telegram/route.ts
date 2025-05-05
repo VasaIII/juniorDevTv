@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import TelegramBot, { InlineKeyboardButton, Message } from 'node-telegram-bot-api';
-import { searchShows, Show } from '@/lib/tvmaze'; // Assuming tvmaze functions are in src/lib
+import TelegramBot, { Message } from 'node-telegram-bot-api';
+import { searchShows, Show } from '@/lib/tvmaze';
 // No longer need favorite functions here as chat doesn't modify them
 // import { addFavorite, removeFavorite, getFavoriteIds, isFavorite } from '@/lib/favorites'; 
 
@@ -35,10 +35,10 @@ export async function POST(request: NextRequest) {
     console.error('Error processing Telegram update:', error);
     // Try sending an error message to the user if possible
     // Check if error is an object with chatId (basic check)
-    if (typeof error === 'object' && error !== null && 'chatId' in error) {
+    if (typeof error === 'object' && error !== null && 'chatId' in error && typeof (error as {chatId: unknown}).chatId === 'number') {
         try {
             // Assuming error.chatId is number if it exists
-            await bot.sendMessage(error.chatId as number, "Sorry, an error occurred. Please try again later.");
+            await bot.sendMessage((error as {chatId: number}).chatId, "Sorry, an error occurred. Please try again later.");
         } catch (sendError) {
             console.error('Failed to send error message to user:', sendError);
         }

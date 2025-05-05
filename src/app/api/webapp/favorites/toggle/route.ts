@@ -35,6 +35,7 @@ function validateInitData(initData: string, botToken: string): TelegramUser | nu
         if (calculatedHash === hash) {
             const userJson = urlParams.get('user');
             // Assume JSON.parse returns a structure matching TelegramUser
+            // Explicitly type the parsed object
             return userJson ? JSON.parse(userJson) as TelegramUser : null;
         }
     } catch (error: unknown) { // Catch as unknown
@@ -93,10 +94,13 @@ export async function POST(request: NextRequest) {
     } catch (error: unknown) { // Catch as unknown
         console.error('Error toggling favorite status:', error);
          let errorMessage = 'Internal server error';
+        // Add explicit type checks
         if (error instanceof SyntaxError) {
             errorMessage = 'Invalid request format';
         } else if (error instanceof Error) {
             errorMessage = error.message;
+        } else if (typeof error === 'string') { // Check if error is a string
+            errorMessage = error;
         }
         return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
     }
