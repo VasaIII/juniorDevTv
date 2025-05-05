@@ -20,20 +20,6 @@ export default function AboutTabContent() {
         marginBottom: '20px',
         lineHeight: 1.6,
     };
-    const listStyle: React.CSSProperties = {
-        listStyle: 'none',
-        padding: 0,
-        marginTop: '15px',
-        fontSize: '1em',
-    };
-    const listItemStyle: React.CSSProperties = {
-        marginBottom: '10px',
-        color: '#777',
-    };
-    const emojiStyle: React.CSSProperties = {
-        marginRight: '10px',
-        fontSize: '1.2em',
-    };
 
     return (
         <div style={containerStyle}>
