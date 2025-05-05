@@ -263,7 +263,6 @@ export default function TvGuideWebApp() {
       console.log(`[FetchEpisodesAndCast] Fetched ${showWithData._embedded.episodes.length} episodes for show ID: ${showId}`);
       return showWithData._embedded.episodes;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error.';
       console.error(`[FetchEpisodesAndCast] Error fetching episodes/cast for show ID ${showId}:`, error);
       return null;
     }
